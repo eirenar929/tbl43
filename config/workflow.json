@@ -1,0 +1,21 @@
+{
+  "settings": {
+    "response_timeout": 10.0,
+    "min_responses": 1,
+    "response_strategy": "compare",
+    "max_message_length": 4000
+  },
+  "identity_protection": {
+    "enabled": true,
+    "rules": [
+      {
+        "pattern": "я (?:являюсь|есть) (?:языковая модель|ИИ|искусственный интеллект)",
+        "action": "remove"
+      },
+      {
+        "pattern": "as an AI language model",
+        "action": "remove"
+      }
+    ]
+  }
+}

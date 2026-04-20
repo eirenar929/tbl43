@@ -1,0 +1,44 @@
+{
+  "models": [
+    {
+      "id": "gpt-4",
+      "type": "api",
+      "name": "gpt-4",
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "health_endpoint": "https://api.openai.com/v1/models",
+      "api_key": "${OPENAI_API_KEY}",
+      "timeout": 30.0
+    },
+    {
+      "id": "claude",
+      "type": "api",
+      "name": "claude-3-opus-20240229",
+      "endpoint": "https://api.anthropic.com/v1/messages",
+      "health_endpoint": "https://api.anthropic.com/v1/health",
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "timeout": 30.0
+    },
+    {
+      "id": "local-llm",
+      "type": "api",
+      "name": "llama2",
+      "endpoint": "http://localhost:11434/api/generate",
+      "health_endpoint": "http://localhost:11434/api/tags",
+      "timeout": 60.0
+    },
+    {
+      "id": "webchat-demo",
+      "type": "webchat",
+      "name": "Demo WebChat",
+      "url": "https://example.com/chat",
+      "selectors": {
+        "input": "textarea#message-input",
+        "submit": "button#send-btn",
+        "output": "div.message:last-child"
+      },
+      "request_template": {
+        "stream": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+# =============================================================================
+# Docker Compose для "Столик на троих" v2.0
+# =============================================================================
+
+version: "3.9"
+
+services:
+  table-for-three:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: table-for-three:v2.0
+    container_name: table-for-three
+    restart: unless-stopped
+    
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    
+    environment:
+      # Основные настройки
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8000
+      
+      # Логирование
+      - APP_LOGGING__LEVEL=${LOG_LEVEL:-INFO}
+      - APP_LOGGING__ENABLE_DIALOG_LOGGING=true
+      - APP_LOGGING__DIALOG_LOG_PATH=logs/dialogs.jsonl
+      
+      # Модерация
+      - APP_MODERATION__OPENAI_API_KEY=${OPENAI_MODERATION_KEY}
+      - APP_MODERATION__THRESHOLD=${MODERATION_THRESHOLD:-0.7}
+      - APP_MODERATION__PRE_MODERATION_ENABLED=true
+      - APP_MODERATION__POST_MODERATION_ENABLED=true
+      
+      # Workflow
+      - APP_WORKFLOW__RESPONSE_TIMEOUT=${RESPONSE_TIMEOUT:-8.0}
+      - APP_WORKFLOW__MIN_RESPONSES=${MIN_RESPONSES:-1}
+      - APP_WORKFLOW__RESPONSE_STRATEGY=${RESPONSE_STRATEGY:-compare}
+      
+      # Playwright
+      - APP_PLAYWRIGHT_HEADLESS=true
+      - APP_PLAYWRIGHT_TIMEOUT=30000
+    
+    volumes:
+      # Логи (сохраняются на хосте)
+      - ./logs:/app/logs
+      # Конфигурация
+      - ./config:/app/config:ro
+      # Статика (можно обновлять без пересборки)
+      - ./static:/app/static:ro
+    
+    # Лимиты ресурсов
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Сетевые настройки
+    networks:
+      - table-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Опционально: Prometheus для метрик
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: table-prometheus
+  #   volumes:
+  #     - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #   ports:
+  #     - "9090:9090"
+  #   networks:
+  #     - table-network
+
+networks:
+  table-network:
+    driver: bridge
