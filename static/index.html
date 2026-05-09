@@ -383,8 +383,10 @@
     function addBotMessage(text) {
       const messageDiv = document.createElement('div');
       messageDiv.className = 'message bot';
+      // Санитизация HTML для предотвращения XSS атак
+      const sanitizedText = sanitizeHtml(marked.parse(text));
       messageDiv.innerHTML = `
-        <div class="message-bubble">${marked.parse(text)}</div>
+        <div class="message-bubble">${sanitizedText}</div>
         <div class="message-meta">AI • ${formatTime()}</div>
       `;
       messagesDiv.appendChild(messageDiv);
@@ -466,6 +468,47 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+    
+    // Санитизация HTML для предотвращения XSS атак
+    function sanitizeHtml(html) {
+      const allowedTags = ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'code', 'pre', 
+                          'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                          'blockquote', 'hr', 'a', 'span', 'div'];
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      
+      // Рекурсивная очистка элементов
+      function cleanElement(element) {
+        // Удаляем все атрибуты кроме безопасных
+        const safeAttrs = ['href', 'src', 'alt', 'title', 'class', 'id'];
+        for (const attr of Array.from(element.attributes)) {
+          if (!safeAttrs.includes(attr.name)) {
+            element.removeAttribute(attr.name);
+          }
+          // Проверяем href и src на javascript: протокол
+          if (attr.name === 'href' || attr.name === 'src') {
+            const value = attr.value.toLowerCase().trim();
+            if (value.startsWith('javascript:') || value.startsWith('data:')) {
+              element.removeAttribute(attr.name);
+            }
+          }
+        }
+        
+        // Рекурсивно обрабатываем детей
+        for (const child of Array.from(element.children)) {
+          if (!allowedTags.includes(child.tagName.toLowerCase())) {
+            // Заменяем запрещённый тег на его текстовое содержимое
+            const textNode = document.createTextNode(child.textContent);
+            child.parentNode.replaceChild(textNode, child);
+          } else {
+            cleanElement(child);
+          }
+        }
+      }
+      
+      cleanElement(doc.body);
+      return doc.body.innerHTML;
     }
     
     function formatTime() {
