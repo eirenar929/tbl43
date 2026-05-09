@@ -21,9 +21,11 @@ import logging
 import os
 import sys
 import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Any, Optional
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -83,6 +85,46 @@ webchat_analyzer: Optional[WebChatAnalyzer] = None
 
 models_config: Dict[str, Any] = {}
 workflow_config: Dict[str, Any] = {}
+
+# Rate limiting для защиты от DoS атак
+class RateLimiter:
+    """Простой rate limiter на основе скользящего окна."""
+    
+    def __init__(self, max_requests: int = 10, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests: Dict[str, list] = defaultdict(list)
+    
+    def is_allowed(self, client_id: str) -> bool:
+        """Проверяет, разрешён ли запрос для данного клиента."""
+        now = datetime.now()
+        window_start = now - timedelta(seconds=self.window_seconds)
+        
+        # Очищаем старые запросы
+        self.requests[client_id] = [
+            req_time for req_time in self.requests[client_id]
+            if req_time > window_start
+        ]
+        
+        # Проверяем лимит
+        if len(self.requests[client_id]) >= self.max_requests:
+            return False
+        
+        # Добавляем новый запрос
+        self.requests[client_id].append(now)
+        return True
+    
+    def get_retry_after(self, client_id: str) -> int:
+        """Возвращает время в секундах до следующего разрешённого запроса."""
+        if not self.requests[client_id]:
+            return 0
+        
+        oldest_request = min(self.requests[client_id])
+        retry_time = oldest_request + timedelta(seconds=self.window_seconds)
+        return max(0, int((retry_time - datetime.now()).total_seconds()))
+
+
+rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 
 
 # ============================================================================
@@ -307,13 +349,24 @@ async def websocket_endpoint(websocket: WebSocket):
     5. Отправляем результат клиенту
     """
     await websocket.accept()
-    client_id = id(websocket)
+    client_id = str(id(websocket))
     logger.info(f"[WS] Клиент {client_id} подключился")
     
     try:
         while True:
             # Получаем сообщение
             user_message = await websocket.receive_text()
+            
+            # Rate limiting - проверка лимита запросов
+            if not rate_limiter.is_allowed(client_id):
+                retry_after = rate_limiter.get_retry_after(client_id)
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Слишком много запросов. Попробуйте через {retry_after} сек."
+                })
+                logger.warning(f"[RateLimit] Клиент {client_id} превысил лимит запросов")
+                continue
+            
             request_id = f"req_{int(time.time())}_{client_id}"
             
             logger.info(f"[WS] Запрос #{request_id}: {user_message[:50]}...")
